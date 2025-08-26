@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wdth,wght@100.4,644&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@plugin "daisyui"; /* This must come before */
+
+.font-fredoka {
+  font-family: 'Fredoka', sans-serif;
+}
+
