@@ -10,10 +10,14 @@ import { connectDB } from "./lib/db.js";
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import { app, server } from "./lib/socket.js";
+import sessionRoutes from "./routes/session.route.js";
+import goalRoutes from "./routes/goal.route.js";
+import favoritesRoutes from "./routes/favorites.route.js";
+import roomRoutes from "./routes/room.route.js";
 
 dotenv.config();
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5000;
 const __dirname = path.resolve();
 
 app.use(express.json());
@@ -27,6 +31,10 @@ app.use(
 
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/sessions", sessionRoutes);
+app.use("/api/goals", goalRoutes);
+app.use("/api/favorites", favoritesRoutes);
+app.use("/api/rooms", roomRoutes);
 
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../frontend/dist")));

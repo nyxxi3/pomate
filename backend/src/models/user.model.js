@@ -20,6 +20,22 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    favorites: [{
+      name: {
+        type: String,
+        required: true,
+        trim: true
+      },
+      url: {
+        type: String,
+        required: true,
+        trim: true
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
   },
   { timestamps: true }
 );

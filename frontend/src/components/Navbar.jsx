@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/useAuthStore";
 import { useMobileSidebarStore } from "../store/useMobileSidebarStore";
+import { useTimerStore } from "../store/useTimerStore";
 import { LogOut, PaintRoller, User, Menu, MoreVertical, ArrowLeft } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 
@@ -12,12 +13,19 @@ const Navbar = () => {
   const isOnProfilePage = location.pathname === "/profile";
   const [isThreeDotMenuOpen, setIsThreeDotMenuOpen] = useState(false);
   const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useMobileSidebarStore();
+  const { isStrictMode, running, hasStarted } = useTimerStore();
   const threeDotMenuRef = useRef(null);
+  const threeDotToggleRef = useRef(null);
+  
+  // Check if navigation should be blocked
+  const shouldBlockNavigation = isStrictMode && running && hasStarted;
 
-  // Close three-dot menu when clicking outside
+  // Close three-dot menu when clicking outside; ignore clicks on the toggle button
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (threeDotMenuRef.current && !threeDotMenuRef.current.contains(event.target)) {
+      const clickedInsideMenu = threeDotMenuRef.current && threeDotMenuRef.current.contains(event.target);
+      const clickedToggle = threeDotToggleRef.current && threeDotToggleRef.current.contains(event.target);
+      if (!clickedInsideMenu && !clickedToggle) {
         setIsThreeDotMenuOpen(false);
       }
     };
@@ -39,7 +47,6 @@ const Navbar = () => {
     } else {
       navigate("/settings");
     }
-    setIsMenuOpen(false);
     setIsThreeDotMenuOpen(false);
   };
 
@@ -54,18 +61,21 @@ const Navbar = () => {
     } else {
       navigate("/profile");
     }
-    setIsMenuOpen(false);
     setIsThreeDotMenuOpen(false);
   };
 
   const handleLogout = () => {
     logout();
-    setIsMenuOpen(false);
     setIsThreeDotMenuOpen(false);
     setIsMobileSidebarOpen(false);
   };
 
   const handleMobileSidebarToggle = () => {
+    if (shouldBlockNavigation) {
+      // Show warning that navigation is blocked
+      alert("🔒 Strict mode active: Navigation blocked until session ends");
+      return;
+    }
     setIsMobileSidebarOpen(!isMobileSidebarOpen);
   };
 
@@ -80,15 +90,15 @@ const Navbar = () => {
             {authUser ? (
               <button
                 onClick={handleMobileSidebarToggle}
-                className="btn btn-sm btn-ghost"
-                aria-label="Toggle sidebar"
+                className={`btn btn-sm ${shouldBlockNavigation ? 'btn-disabled opacity-50' : 'btn-ghost'}`}
+                aria-label={shouldBlockNavigation ? "Navigation blocked in strict mode" : "Toggle sidebar"}
+                disabled={shouldBlockNavigation}
               >
                 {isMobileSidebarOpen ? <ArrowLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
-            ) : (
-              <img src="/pixel tomato.png" alt="Pomate" className="w-8 h-8" />
-            )}
+            ) : null}
             <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-all">
+              <img src="/pixel tomato.png" alt="Pomate" className="w-8 h-8" />
               <h1 className="text-3xl font-bold font-fredoka text-primary">pomate.</h1>
             </Link>
           </div>
@@ -96,6 +106,7 @@ const Navbar = () => {
           {/* Right-side three-dot menu (mobile only) */}
           <div className="relative sm:hidden">
             <button
+              ref={threeDotToggleRef}
               className="btn btn-sm btn-ghost"
               onClick={() => setIsThreeDotMenuOpen(!isThreeDotMenuOpen)}
               aria-label="Open menu"

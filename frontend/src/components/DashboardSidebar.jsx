@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 
-const DashboardSidebar = ({ expanded, onToggle }) => {
+const DashboardSidebar = ({ expanded, onToggle, disabled = false }) => {
   const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
   const { onlineUsers } = useAuthStore();
   const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useMobileSidebarStore();
@@ -70,7 +70,7 @@ const DashboardSidebar = ({ expanded, onToggle }) => {
         {/* Backdrop */}
         <div 
           className={`fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300 ${isMobileSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-          onClick={() => setIsMobileSidebarOpen(false)}
+          onClick={() => !disabled && setIsMobileSidebarOpen(false)}
         />
         
                   {/* Slide-out Sidebar */}
@@ -79,12 +79,13 @@ const DashboardSidebar = ({ expanded, onToggle }) => {
             <div className="border-b border-base-300 w-full p-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg">Menu</h3>
-                <button
-                  onClick={() => setIsMobileSidebarOpen(false)}
-                  className="btn btn-ghost btn-sm"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
+                                  <button
+                    onClick={() => !disabled && setIsMobileSidebarOpen(false)}
+                    className={`btn btn-ghost btn-sm ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={disabled}
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
               </div>
             </div>
 

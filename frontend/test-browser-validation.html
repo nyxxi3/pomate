@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube URL Validation Test</title>
+</head>
+<body>
+    <h1>YouTube URL Validation Test</h1>
+    
+    <div>
+        <label for="urlInput">Enter YouTube URL:</label>
+        <input type="text" id="urlInput" placeholder="https://www.youtube.com/playlist?list=..." style="width: 400px;">
+        <button onclick="testValidation()">Test Validation</button>
+    </div>
+    
+    <div id="result" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc;"></div>
+
+    <script type="module">
+        import { detectUrlType, extractVideoId, extractPlaylistId } from './src/lib/youtubeUrlValidation.js';
+        
+        window.testValidation = function() {
+            const url = document.getElementById('urlInput').value;
+            const resultDiv = document.getElementById('result');
+            
+            if (!url) {
+                resultDiv.innerHTML = '<p style="color: red;">Please enter a URL</p>';
+                return;
+            }
+            
+            try {
+                const urlType = detectUrlType(url);
+                const videoId = extractVideoId(url);
+                const playlistId = extractPlaylistId(url);
+                
+                let resultHtml = '<h3>Validation Results:</h3>';
+                resultHtml += `<p><strong>URL:</strong> ${url}</p>`;
+                resultHtml += `<p><strong>Type:</strong> ${urlType.type}</p>`;
+                resultHtml += `<p><strong>Video ID:</strong> ${videoId || 'None'}</p>`;
+                resultHtml += `<p><strong>Playlist ID:</strong> ${playlistId || 'None'}</p>`;
+                resultHtml += `<p><strong>Valid:</strong> <span style="color: ${urlType.type !== 'invalid' ? 'green' : 'red'}">${urlType.type !== 'invalid' ? 'YES' : 'NO'}</span></p>`;
+                
+                if (urlType.type === 'playlist') {
+                    resultHtml += `<p style="color: green;">✅ This is a valid YouTube playlist URL</p>`;
+                } else if (urlType.type === 'video') {
+                    resultHtml += `<p style="color: green;">✅ This is a valid YouTube video URL</p>`;
+                } else {
+                    resultHtml += `<p style="color: red;">❌ This is not a valid YouTube URL</p>`;
+                }
+                
+                resultDiv.innerHTML = resultHtml;
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        };
+        
+        // Test with the specific playlist URL
+        console.log('Testing with specific playlist URL...');
+        const testUrl = 'https://www.youtube.com/playlist?list=PLDisKgcnAC4SqX0mi1J5_gd7-hrIS5yJp';
+        const result = detectUrlType(testUrl);
+        console.log('Test result:', result);
+        
+        // Set the test URL in the input field
+        document.getElementById('urlInput').value = testUrl;
+    </script>
+</body>
+</html>
+

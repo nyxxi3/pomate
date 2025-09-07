@@ -3,6 +3,9 @@ import { axiosInstance } from "../lib/axios.js";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 
+// Import timer store to clear timer state on logout
+import { useTimerStore } from "./useTimerStore.js";
+
 const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5001" : "/";
 
 export const useAuthStore = create((set, get) => ({
@@ -60,8 +63,33 @@ export const useAuthStore = create((set, get) => ({
   logout: async () => {
     try {
       await axiosInstance.post("/auth/logout");
+      
+      // Only clear timer state if in strict mode
+      try {
+        const timerStore = useTimerStore.getState();
+        // Check if timer store is properly initialized
+        if (timerStore && typeof timerStore.isStrictMode !== 'undefined' && timerStore.running) {
+          if (timerStore.isStrictMode) {
+            console.log("🔒 Strict mode active, clearing timer state on logout");
+            timerStore.clearAllTimerState();
+          } else {
+            console.log("⏸️ Normal mode, pausing timer on logout (state preserved)");
+            // Just pause the timer, don't clear state
+            timerStore.stopTimer();
+          }
+        } else {
+          console.log("⏸️ Timer not running or store not initialized, no cleanup needed");
+        }
+      } catch (error) {
+        console.error("Error handling timer state during logout:", error);
+        // Continue with logout even if timer handling fails
+      }
+      
       set({ authUser: null });
       toast.success("Logged out successfully");
+      
+      // Leave all rooms before disconnecting
+      await get().leaveAllRooms();
       get().disconnectSocket();
     } catch (error) {
       toast.error(error.response.data.message);
@@ -101,5 +129,20 @@ export const useAuthStore = create((set, get) => ({
   },
   disconnectSocket: () => {
     if (get().socket?.connected) get().socket.disconnect();
+  },
+
+  // Cleanup function to leave all rooms when user logs out or disconnects
+  leaveAllRooms: async () => {
+    try {
+      // Import room store dynamically to avoid circular dependency
+      const { useRoomStore } = await import("./useRoomStore.js");
+      const roomStore = useRoomStore.getState();
+      
+      if (roomStore.currentRoom) {
+        await roomStore.leaveRoom();
+      }
+    } catch (error) {
+      console.error("Error leaving rooms during cleanup:", error);
+    }
   },
 }));
