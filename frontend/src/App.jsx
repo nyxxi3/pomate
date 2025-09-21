@@ -15,83 +15,130 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/useAuthStore";
 import { useThemeStore } from "./store/useThemeStore";
 import { useRoomStore } from "./store/useRoomStore";
+import { useRoomTimerStore } from "./store/useRoomTimerStore";
+import { useZoomStore } from "./store/useZoomStore";
 import { useEffect, useRef } from "react";
 
 import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 
 const App = () => {
-  const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore();
+  const { authUser, isCheckingAuth } = useAuthStore();
   const { theme } = useThemeStore();
-  const { initializeCleanup, cleanupOnNavigation } = useRoomStore();
+  const { currentRoom, initializeRoomStore } = useRoomStore();
+  const { restoreTimerState } = useRoomTimerStore();
+  const { toggleZoom } = useZoomStore();
   const location = useLocation();
+  const audioRef = useRef(null);
 
-  console.log({ onlineUsers });
-
+  // Apply theme to document
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  // Ensure theme applies consistently across the document (fixes theme shifts on scroll)
-  useEffect(() => {
-    if (theme) {
-      document.documentElement.setAttribute("data-theme", theme);
-    }
+    document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Initialize room cleanup listeners
+  // Global keyboard shortcuts
   useEffect(() => {
-    const cleanup = initializeCleanup();
-    return cleanup;
-  }, [initializeCleanup]);
-
-  // Handle navigation cleanup - use a ref to track previous path
-  const prevPathRef = useRef(location.pathname);
-  
-  useEffect(() => {
-    // Only cleanup if we're actually navigating away from a room
-    if (prevPathRef.current !== location.pathname) {
-      const wasInRoom = prevPathRef.current.startsWith('/room/');
-      if (wasInRoom) {
-        // Call async cleanup function
-        cleanupOnNavigation().catch(error => {
-          console.error("Error during navigation cleanup:", error);
-        });
+    const handleKeyDown = (e) => {
+      // F11 key to toggle zoom mode
+      if (e.key === 'F11') {
+        e.preventDefault();
+        // Determine zoom type based on current route
+        if (location.pathname === '/solo') {
+          toggleZoom('solo');
+        } else if (location.pathname.startsWith('/room/')) {
+          toggleZoom('room');
+        }
       }
-      prevPathRef.current = location.pathname;
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [location.pathname, toggleZoom]);
+
+  // Restore room state on app load (for page refresh)
+  useEffect(() => {
+    if (authUser && !currentRoom) {
+      console.log("🏠 [APP] App loaded, trying to restore room state");
+      const restoredRoom = initializeRoomStore();
+      if (restoredRoom) {
+        console.log("🏠 [APP] Successfully restored room on app load:", restoredRoom._id);
+        // Also restore timer state when room is restored with a delay
+        setTimeout(() => {
+          console.log("⏰ [APP] Restoring timer state on app load (delayed)");
+          restoreTimerState();
+        }, 200);
+      }
     }
-  }, [location.pathname, cleanupOnNavigation]);
+  }, [authUser, currentRoom, initializeRoomStore, restoreTimerState]);
 
-  console.log({ authUser });
+  // Check authentication on app load
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        await useAuthStore.getState().checkAuth();
+      } catch (error) {
+        console.error("Auth check failed:", error);
+      }
+    };
+    checkAuth();
+  }, []);
 
-  if (isCheckingAuth)
+  // Show loading spinner while checking authentication
+  if (isCheckingAuth) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader className="size-10 animate-spin" />
+      <div className="min-h-screen bg-base-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-base-content/70">Loading...</p>
+        </div>
       </div>
     );
+  }
+
+  // Determine if user is on an auth page
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
 
   return (
-    <div data-theme={theme} className="min-h-screen bg-base-100">
-      <Navbar />
-      <GlobalTimer />
+    <div className="min-h-screen bg-base-100">
+      {/* Navbar - only show if user is authenticated and not on auth pages */}
+      {authUser && !isAuthPage && <Navbar />}
+      
+      {/* Global Timer - only show if user is authenticated and not on auth pages */}
+      {authUser && !isAuthPage && <GlobalTimer />}
+      
+      {/* Music Player - only show if user is authenticated and not on auth pages */}
+      {authUser && !isAuthPage && <MusicPlayer />}
 
-      <main className="min-h-screen bg-base-100">
-        <Routes>
-          <Route path="/" element={authUser ? <HomePage /> : <LandingPage />} />
-          <Route path="/signup" element={!authUser ? <SignUpPage /> : <Navigate to="/" />} />
-          <Route path="/login" element={!authUser ? <LoginPage /> : <Navigate to="/" />} />
-          <Route path="/settings" element={authUser ? <SettingsPage /> : <Navigate to="/" />} />
-          <Route path="/solo" element={authUser ? <SoloSessionPage /> : <Navigate to="/" />} />
-          <Route path="/profile" element={authUser ? <ProfilePage /> : <Navigate to="/login" />} />
-          <Route path="/room/:roomId" element={authUser ? <RoomPage /> : <Navigate to="/login" />} />
-        </Routes>
-      </main>
+      {/* Main Content */}
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={authUser ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+        <Route path="/login" element={authUser ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+        <Route path="/signup" element={authUser ? <Navigate to="/dashboard" replace /> : <SignUpPage />} />
+        
+        {/* Protected Routes */}
+        <Route path="/dashboard" element={authUser ? <HomePage /> : <Navigate to="/login" replace />} />
+        <Route path="/solo" element={authUser ? <SoloSessionPage /> : <Navigate to="/login" replace />} />
+        <Route path="/settings" element={authUser ? <SettingsPage /> : <Navigate to="/login" replace />} />
+        <Route path="/profile" element={authUser ? <ProfilePage /> : <Navigate to="/login" replace />} />
+        <Route path="/room/:roomId" element={authUser ? <RoomPage /> : <Navigate to="/login" replace />} />
+        
+        {/* Catch all route */}
+        <Route path="*" element={<Navigate to={authUser ? "/dashboard" : "/"} replace />} />
+      </Routes>
 
-      {/* Global Music Player - mounted once and never unmounted */}
-      {authUser && <MusicPlayer />}
-
-      <Toaster />
+      {/* Toast notifications */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: 'hsl(var(--b1))',
+            color: 'hsl(var(--bc))',
+            border: '1px solid hsl(var(--b3))',
+          },
+        }}
+      />
     </div>
   );
 };

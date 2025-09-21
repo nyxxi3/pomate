@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { X, Users, Clock, MessageCircle, HelpCircle, Plus, Minus } from "lucide-react";
 import { useRoomStore } from "../store/useRoomStore";
+import { useRoomTimerStore } from "../store/useRoomTimerStore";
 import { useNavigate } from "react-router-dom";
 
 const CreateRoomDialog = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { roomForm, setRoomForm, createRoom, isCreatingRoom, resetRoomForm } = useRoomStore();
+  const { roomForm, setRoomForm, createRoom, isCreatingRoom } = useRoomStore();
   const [errors, setErrors] = useState({});
 
   const handleInputChange = (field, value) => {
@@ -50,9 +51,13 @@ const CreateRoomDialog = ({ isOpen, onClose }) => {
 
     try {
       console.log("🏗️ [FRONTEND] CreateRoomDialog handleSubmit() START");
+      
+      // Clear any existing timer state when creating a new room
+      useRoomTimerStore.getState().clearAllTimerState();
+      
       const room = await createRoom(roomForm);
       console.log("🏗️ [FRONTEND] CreateRoomDialog handleSubmit() Room created, navigating to:", `/room/${room._id}`);
-      resetRoomForm();
+      // Keep the name persistent - don't clear it
       onClose();
       
       // Small delay to ensure room is fully created and stored before navigation
@@ -65,7 +70,7 @@ const CreateRoomDialog = ({ isOpen, onClose }) => {
   };
 
   const handleCancel = () => {
-    resetRoomForm();
+    // Don't reset the form when canceling - keep user's input for next time
     setErrors({});
     onClose();
   };

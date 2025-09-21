@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import notificationService from "../lib/notificationService.js";
 
 export const useTimerStore = create((set, get) => ({
   // Timer state
@@ -201,7 +202,7 @@ export const useTimerStore = create((set, get) => ({
   },
 
   // Start timer
-  startTimer: (testDuration = null) => {
+  startTimer: async (testDuration = null) => {
     const { hasStarted, mode, workMinutes, breakMinutes, sessionGoal } = get();
     
     if (!hasStarted) {
@@ -279,6 +280,19 @@ export const useTimerStore = create((set, get) => ({
         timestamp: new Date().toISOString()
       };
       set(state);
+      
+      // Stop and reset room timer if running
+      try {
+        const { useRoomTimerStore } = await import("./useRoomTimerStore.js");
+        const roomTimerStore = useRoomTimerStore.getState();
+        if (roomTimerStore.running) {
+          console.log("⏰ [FRONTEND] Stopping room timer due to starting solo session");
+          roomTimerStore.stopTimer();
+        }
+      } catch (error) {
+        console.log("⏰ [FRONTEND] Could not stop room timer:", error);
+      }
+      
       get().saveTimerState();
     } else {
       // Resume existing session
@@ -398,6 +412,102 @@ export const useTimerStore = create((set, get) => ({
     localStorage.removeItem("timerState");
   },
 
+  // ============================================================================
+  // ROOM TIMER SYNCHRONIZATION FUNCTIONS
+  // ============================================================================
+
+  // Sync timer with room state (for non-admin users) - Simplified and efficient
+  syncTimerWithRoom: (timerData) => {
+    console.log("🔄 [TIMER STORE] Syncing timer with room state:", timerData);
+    
+    const { sessionType, duration, startTime, remaining, isRunning } = timerData;
+    const mode = sessionType === 'work' ? 'work' : 'break';
+    
+    // Calculate actual remaining time based on current state
+    let actualRemaining = remaining;
+    let actualRunning = isRunning;
+    
+    if (isRunning && startTime) {
+      // Timer is running - calculate real-time remaining
+      const elapsed = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
+      actualRemaining = Math.max(0, duration - elapsed);
+      
+      // If timer has expired, mark as stopped
+      if (actualRemaining <= 0) {
+        actualRunning = false;
+        actualRemaining = 0;
+      }
+    }
+    
+    // Set timer state based on calculated values
+    const now = Date.now();
+    const endTime = actualRunning ? now + (actualRemaining * 1000) : null;
+    
+    set({
+      mode,
+      remaining: actualRemaining,
+      totalSeconds: duration,
+      running: actualRunning,
+      hasStarted: actualRemaining > 0 || !actualRunning,
+      isExplicitlyPaused: !actualRunning && actualRemaining > 0,
+      startTime: actualRunning ? now : null,
+      endTime: endTime,
+      pausedAt: !actualRunning && actualRemaining > 0 ? now : null,
+      pausedRemaining: !actualRunning && actualRemaining > 0 ? actualRemaining : null,
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log("🔄 [TIMER STORE] Timer synced - running:", actualRunning, "remaining:", actualRemaining);
+    get().saveTimerState();
+  },
+
+  // Start timer with specific duration (for room sync)
+  startTimerWithDuration: (duration, sessionType = 'work') => {
+    console.log("🔄 [TIMER STORE] Starting timer with duration:", duration, "sessionType:", sessionType);
+    
+    const mode = sessionType === 'work' ? 'work' : 'break';
+    const now = Date.now();
+    const endTime = now + (duration * 1000);
+    
+    set({
+      mode,
+      remaining: duration,
+      totalSeconds: duration,
+      running: true,
+      hasStarted: true,
+      isExplicitlyPaused: false,
+      startTime: now,
+      endTime: endTime,
+      pausedAt: null,
+      pausedRemaining: null,
+      timestamp: new Date().toISOString()
+    });
+    
+    get().saveTimerState();
+    get().startMusicIfEnabled();
+    get().executeTimerStartCallbacks();
+  },
+
+  // Pause timer with specific remaining time (for room sync)
+  pauseTimerWithRemaining: (remaining) => {
+    console.log("🔄 [TIMER STORE] Pausing timer with remaining:", remaining);
+    
+    const now = Date.now();
+    
+    set({
+      running: false,
+      isExplicitlyPaused: true,
+      remaining: remaining,
+      pausedAt: now,
+      pausedRemaining: remaining,
+      timestamp: new Date().toISOString()
+    });
+    
+    get().saveTimerState();
+    get().pauseMusicIfEnabled();
+    get().executeTimerPauseCallbacks();
+  },
+
   // Skip break (switch to work mode)
   skipBreak: () => {
     const { workMinutes } = get();
@@ -514,12 +624,7 @@ export const useTimerStore = create((set, get) => ({
       });
       
       // Show notification for break time
-      if (Notification.permission === "granted") {
-        new Notification("Break Time! 🎉", {
-          body: `Great work! Time for a ${currentState.breakMinutes}-minute break.`,
-          icon: "/favicon.ico"
-        });
-      }
+      notificationService.showTimerCompleteNotification('work');
     } else {
       // Break completed - reset to work mode but don't auto-start
       const workDuration = currentState.workMinutes * 60;
@@ -540,12 +645,7 @@ export const useTimerStore = create((set, get) => ({
       });
       
       // Show notification for work time
-      if (Notification.permission === "granted") {
-        new Notification("Break Over! 💪", {
-          body: "Ready for another productive work session?",
-          icon: "/favicon.ico"
-        });
-      }
+      notificationService.showTimerCompleteNotification('break');
     }
     
     // Clear timer state from localStorage (soloSession is cleared by markCompleted callback)

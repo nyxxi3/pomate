@@ -4,10 +4,10 @@ const formatTime = (seconds) => {
   return `${m} : ${s}`;
 };
 
-const SoloTimer = ({ remainingSeconds, totalSeconds, colorToken }) => {
+const SoloTimer = ({ remainingSeconds, totalSeconds, colorToken, maxWidth = "w-full" }) => {
   const percentage = totalSeconds === 0 ? 0 : ((totalSeconds - remainingSeconds) / totalSeconds) * 100;
   return (
-    <div className="w-full">
+    <div className={maxWidth}>
       <div className="w-full h-2 rounded bg-base-200">
         <div
           className={`h-2 rounded bg-${colorToken} transition-all duration-500`}

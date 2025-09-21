@@ -1,13 +1,32 @@
 import { Plus, Users, CornerDownLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useRoomStore } from "../store/useRoomStore";
 import CreateRoomDialog from "./CreateRoomDialog";
 
 const QuickStartCard = ({ activeSolo, remaining }) => {
   const navigate = useNavigate();
   const [showCreateRoomDialog, setShowCreateRoomDialog] = useState(false);
+  const { currentRoom, leaveRoom } = useRoomStore();
   
-  const handleCreateSoloSession = () => {
+  const handleCreateSoloSession = async () => {
+    // Check if user is in a room
+    if (currentRoom) {
+      const confirmLeave = window.confirm(
+        `You're currently in a room (${currentRoom.name}). Do you want to leave it and start a solo session?`
+      );
+      
+      if (!confirmLeave) {
+        return; // User cancelled
+      }
+      
+      // Leave the room first
+      const left = await leaveRoom(currentRoom._id);
+      if (!left) {
+        return; // Failed to leave room
+      }
+    }
+    
     navigate("/solo");
   };
 

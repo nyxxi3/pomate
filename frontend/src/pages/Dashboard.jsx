@@ -2,19 +2,25 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import { useTimerStore } from "../store/useTimerStore";
+import { useRoomStore } from "../store/useRoomStore";
 import DashboardSidebar from "../components/DashboardSidebar";
 import QuickStartCard from "../components/QuickStartCard";
 import ActiveRooms from "../components/ActiveRooms";
 import GoalsCard from "../components/GoalsCard";
+import HabitTracker from "../components/HabitTracker";
+import DraggableDashboard from "../components/DraggableDashboard";
+import ProgressCard from "../components/ProgressCard";
 import ChatContainer from "../components/ChatContainer";
 import NoChatSelected from "../components/NoChatSelected";
 import SoloTimer from "../components/solo/SoloTimer";
 import { useNavigate } from "react-router-dom";
 import { fetchStats } from "../lib/sessionsApi";
+import notificationService from "../lib/notificationService.js";
 
 const Dashboard = () => {
   const { authUser } = useAuthStore();
   const { selectedUser } = useChatStore();
+  const { clearAllRoomState } = useRoomStore();
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const navigate = useNavigate();
   
@@ -23,6 +29,22 @@ const Dashboard = () => {
   const [activeSolo, setActiveSolo] = useState(null);
   const [remaining, setRemaining] = useState(0);
   const [stats, setStats] = useState(null);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Clear any room state when dashboard loads
+  useEffect(() => {
+    clearAllRoomState();
+  }, [clearAllRoomState]);
 
   useEffect(() => {
     const readActive = () => {
@@ -32,10 +54,7 @@ const Dashboard = () => {
         // Session completed - show notification and clear
         if (activeSolo) {
           const sessionType = activeSolo.sessionType === "focus" ? "Focus session" : "Break session";
-          new Notification(`${sessionType} completed!`, {
-            body: "Time to take a break or start a new session.",
-            icon: "/pixel tomato.png"
-          });
+          notificationService.showSessionCompletedNotification(sessionType);
         }
         setActiveSolo(null);
         setRemaining(0);
@@ -106,13 +125,33 @@ const Dashboard = () => {
             <>
               {/* Header */}
               <div className="flex flex-col gap-4">
-                <div>
-                  <h1 className="text-3xl lg:text-4xl font-bold font-fredoka text-primary">
-                    Welcome back, {authUser?.fullName?.split(' ')[0] || 'Pomate'}!
-                  </h1>
-                  <p className="text-base-content/70 mt-2">
-                    Ready to stay focused and achieve your goals today?
-                  </p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h1 className="text-3xl lg:text-4xl font-bold font-fredoka text-primary">
+                      Welcome back, {authUser?.fullName?.split(' ')[0] || 'Pomate'}!
+                    </h1>
+                    <p className="text-base-content/70 mt-2">
+                      Ready to stay focused and achieve your goals today?
+                    </p>
+                  </div>
+                  
+                  {/* Reset Layout Button - Desktop Only */}
+                  {isDesktop && (
+                    <button
+                      onClick={() => {
+                        // Get the reset function from DraggableDashboard
+                        const event = new CustomEvent('resetLayout');
+                        window.dispatchEvent(event);
+                      }}
+                      className="btn btn-sm btn-outline gap-2 opacity-60 hover:opacity-100 transition-opacity"
+                      title="Reset to default layout"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Reset Layout
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -137,90 +176,17 @@ const Dashboard = () => {
                 </div>
               )}
 
-              {/* Content Cards - Stack vertically on mobile, side by side on large screens */}
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                {/* Left Column - Main Content */}
-                <div className="lg:col-span-3 space-y-6">
-                  {/* Quick Start Card */}
-                  <QuickStartCard activeSolo={activeSolo} remaining={remaining} />
-
-                  {/* Active Rooms */}
-                  <ActiveRooms />
-                </div>
-
-                {/* Right Column - Progress and Goals */}
-                <div className="lg:col-span-1 space-y-4">
-                  {/* Progress Section */}
-                  <div className="bg-base-100 rounded-xl p-6 shadow-sm border border-base-300">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                        <span className="text-primary-content font-bold">⚡</span>
-                      </div>
-                      <h3 className="text-3xl font-semibold text-base-content font-fredoka">Your Progress</h3>
-                    </div>
-                    
-                    {/* Today's Date and Time */}
-                    <div className="mb-4 text-center">
-                      <div className="text-lg font-semibold text-base-content">
-                        {new Date().toLocaleDateString('en-US', { 
-                          weekday: 'long', 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                      </div>
-                      <div className="text-base font-medium text-base-content/70 mt-1">
-                        {new Date().toLocaleTimeString('en-US', { 
-                          hour: '2-digit', 
-                          minute: '2-digit',
-                          hour12: true 
-                        })}
-                      </div>
-                    </div>
-                    
-                    {/* Today's Progress - Primary Metrics */}
-                    <div className="text-center mb-4">
-                                              <div className="text-5xl font-bold text-primary font-fredoka">
-                          {stats ? formatTime(stats.todayFocusSeconds) : "0m"}
-                        </div>
-                        <div className="text-sm text-base-content/60 mb-2">Focus Time Today</div>
-                        
-                        <div className="text-3xl font-bold text-primary font-fredoka">
-                          {stats ? stats.todayCompletedCount : 0}
-                        </div>
-                        <div className="text-sm text-base-content/60">Completed Sessions</div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-sm text-base-content/70">This Week</span>
-                        <div className="text-right">
-                          <div className="text-base-content font-medium">{stats ? formatTime(stats.weekFocusSeconds) : "0m"}</div>
-                          <div className="text-xs text-base-content/60">{stats ? stats.weekCompletedCount : 0} sessions</div>
-                        </div>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-base-content/70">This Month</span>
-                        <div className="text-right">
-                          <div className="text-base-content font-medium">{stats ? formatTime(stats.monthFocusSeconds) : "0m"}</div>
-                          <div className="text-xs text-base-content/60">{stats ? stats.monthCompletedCount : 0} sessions</div>
-                        </div>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-base-content/70">This Year</span>
-                        <div className="text-right">
-                          <div className="text-base-content font-medium">{stats ? formatTime(stats.yearFocusSeconds) : "0m"}</div>
-                          <div className="text-xs text-base-content/60">{stats ? stats.yearCompletedCount : 0} sessions</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                  </div>
-                  
-                  {/* Goals Card */}
-                  <GoalsCard />
-                </div>
-              </div>
+              {/* Draggable Dashboard Layout */}
+              <DraggableDashboard
+                QuickStartCard={QuickStartCard}
+                ActiveRooms={ActiveRooms}
+                HabitTracker={HabitTracker}
+                ProgressCard={ProgressCard}
+                GoalsCard={GoalsCard}
+                activeSolo={activeSolo}
+                remaining={remaining}
+                isDesktop={isDesktop}
+              />
             </>
           )}
         </div>

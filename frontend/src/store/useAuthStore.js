@@ -22,7 +22,12 @@ export const useAuthStore = create((set, get) => ({
       const res = await axiosInstance.get("/auth/check");
 
       set({ authUser: res.data });
-      get().connectSocket();
+      try {
+        get().connectSocket();
+      } catch (socketError) {
+        console.error("Socket connection failed:", socketError);
+        // Continue without socket connection
+      }
     } catch (error) {
       console.log("Error in checkAuth:", error);
       set({ authUser: null });
@@ -37,7 +42,12 @@ export const useAuthStore = create((set, get) => ({
       const res = await axiosInstance.post("/auth/signup", data);
       set({ authUser: res.data });
       toast.success("Account created successfully");
-      get().connectSocket();
+      try {
+        get().connectSocket();
+      } catch (socketError) {
+        console.error("Socket connection failed:", socketError);
+        // Continue without socket connection
+      }
     } catch (error) {
       toast.error(error.response.data.message);
     } finally {
@@ -52,7 +62,12 @@ export const useAuthStore = create((set, get) => ({
       set({ authUser: res.data });
       toast.success("Logged in successfully");
 
-      get().connectSocket();
+      try {
+        get().connectSocket();
+      } catch (socketError) {
+        console.error("Socket connection failed:", socketError);
+        // Continue without socket connection
+      }
     } catch (error) {
       toast.error(error.response.data.message);
     } finally {
@@ -126,9 +141,39 @@ export const useAuthStore = create((set, get) => ({
     socket.on("getOnlineUsers", (userIds) => {
       set({ onlineUsers: userIds });
     });
+
+    // Send heartbeat every 30 seconds to keep connection alive and track activity
+    const heartbeatInterval = setInterval(() => {
+      if (socket.connected) {
+        // Import room store dynamically to get current room
+        import("./useRoomStore.js").then(({ useRoomStore }) => {
+          const { currentRoom } = useRoomStore.getState();
+          socket.emit("heartbeat", { 
+            roomId: currentRoom?._id || null 
+          });
+        });
+      } else {
+        clearInterval(heartbeatInterval);
+      }
+    }, 30000);
+
+    // Handle heartbeat acknowledgment
+    socket.on("heartbeatAck", (data) => {
+      console.log("💓 [FRONTEND] Heartbeat acknowledged:", data.timestamp);
+    });
+
+    // Store interval ID for cleanup
+    socket.heartbeatInterval = heartbeatInterval;
   },
   disconnectSocket: () => {
-    if (get().socket?.connected) get().socket.disconnect();
+    const socket = get().socket;
+    if (socket?.connected) {
+      // Clear heartbeat interval
+      if (socket.heartbeatInterval) {
+        clearInterval(socket.heartbeatInterval);
+      }
+      socket.disconnect();
+    }
   },
 
   // Cleanup function to leave all rooms when user logs out or disconnects
@@ -138,8 +183,20 @@ export const useAuthStore = create((set, get) => ({
       const { useRoomStore } = await import("./useRoomStore.js");
       const roomStore = useRoomStore.getState();
       
+      // Only leave the current room if it exists
       if (roomStore.currentRoom) {
+        console.log("🚪 [AUTH] Leaving current room during logout:", roomStore.currentRoom._id);
         await roomStore.leaveRoom();
+      } else {
+        // If no current room, use cleanup endpoint to ensure user is removed from all rooms
+        console.log("🚪 [AUTH] No current room, using cleanup endpoint for logout");
+        try {
+          await axiosInstance.post("/rooms/cleanup-user-sockets", {
+            userId: get().authUser?._id
+          });
+        } catch (cleanupError) {
+          console.error("🚪 [AUTH] Error during cleanup endpoint:", cleanupError);
+        }
       }
     } catch (error) {
       console.error("Error leaving rooms during cleanup:", error);

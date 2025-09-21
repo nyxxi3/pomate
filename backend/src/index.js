@@ -9,11 +9,18 @@ import { connectDB } from "./lib/db.js";
 
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
-import { app, server } from "./lib/socket.js";
+import { initializeSocket } from "./lib/socket.js";
+import { createServer } from "http";
+
+const app = express();
+const server = createServer(app);
 import sessionRoutes from "./routes/session.route.js";
 import goalRoutes from "./routes/goal.route.js";
+import habitRoutes from "./routes/habit.route.js";
 import favoritesRoutes from "./routes/favorites.route.js";
 import roomRoutes from "./routes/room.route.js";
+import roomMessageRoutes from "./routes/roomMessage.route.js";
+import userPreferencesRoutes from "./routes/userPreferences.route.js";
 
 dotenv.config();
 
@@ -33,8 +40,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/sessions", sessionRoutes);
 app.use("/api/goals", goalRoutes);
+app.use("/api/habits", habitRoutes);
 app.use("/api/favorites", favoritesRoutes);
 app.use("/api/rooms", roomRoutes);
+app.use("/api/room-messages", roomMessageRoutes);
+app.use("/api/user-preferences", userPreferencesRoutes);
 
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../frontend/dist")));
@@ -47,4 +57,15 @@ if (process.env.NODE_ENV === "production") {
 server.listen(PORT, () => {
   console.log("server is running on PORT:" + PORT);
   connectDB();
+  initializeSocket(app, server);
+  
+  // Schedule cleanup of dormant rooms every hour
+  setInterval(async () => {
+    try {
+      const { cleanupDormantRooms } = await import('./controllers/room.controller.js');
+      await cleanupDormantRooms();
+    } catch (error) {
+      console.error("Error running room cleanup:", error);
+    }
+  }, 60 * 60 * 1000); // Every hour
 });

@@ -1,0 +1,12 @@
+// ... [previous code remains the same until line 500] ...
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Participants & Room Info Section */}
+          <div className="space-y-4">
+            {/* Room Info Card */}
+            <div className="card bg-base-100 shadow-xl border border-base-300">
+// ... [rest of the code remains the same] ...

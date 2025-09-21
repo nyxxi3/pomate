@@ -3,6 +3,8 @@ import { Target, Plus, Trash2, Edit2, Check, X } from "lucide-react";
 import { createGoal, fetchGoals, updateGoal, deleteGoal, reorderGoals } from "../lib/goalsApi";
 import { useNavigate } from "react-router-dom";
 import { useTimerStore } from "../store/useTimerStore";
+import { useRoomStore } from "../store/useRoomStore";
+import { useRoomTimerStore } from "../store/useRoomTimerStore";
 import toast from "react-hot-toast";
 import {
   DndContext,
@@ -350,15 +352,22 @@ const GoalsCard = ({ colorToken = "primary" }) => {
     setShowAddForm(false);
   };
 
-  const handleFocusGoal = (goal) => {
-    // Set the session goal in the timer store
-    setSessionGoal(goal.text);
+  const handleFocusGoal = async (goal) => {
+    // Check if user is in a room
+    const { currentRoom, leaveRoom } = useRoomStore.getState();
     
-    // Show success message
-    toast.success(`Focusing on: ${goal.text}`);
-    
-    // Navigate to solo page
-    navigate('/solo');
+    if (currentRoom) {
+      // In a room - set user-specific focus goal for the room timer
+      const { setUserFocusGoal } = useRoomTimerStore.getState();
+      setUserFocusGoal(goal.text);
+    } else {
+      // Not in a room - start solo session
+      // Set the session goal in the timer store
+      setSessionGoal(goal.text);
+      
+      // Navigate to solo page
+      navigate('/solo');
+    }
   };
 
   return (

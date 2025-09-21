@@ -1,6 +1,6 @@
 import { Play, Pause, Square, SkipForward } from "lucide-react";
 
-const SoloControls = ({ running, hasStarted = false, isStrictMode = false, onToggleRunning, onStop, onSkip, showSkip, colorToken = "primary", disableStart = false }) => {
+const SoloControls = ({ running, hasStarted = false, isStrictMode = false, onToggleRunning, onStop, onSkip, showSkip, colorToken = "primary", disableStart = false, disablePause = false }) => {
   return (
     <div className="flex flex-wrap items-center gap-3 justify-center w-full">
       {!hasStarted ? (
@@ -14,7 +14,8 @@ const SoloControls = ({ running, hasStarted = false, isStrictMode = false, onTog
       ) : (
         <>
           {/* In strict mode, only show pause/resume button if not currently running or if not in strict mode */}
-          {(!isStrictMode || !running) && (
+          {/* Also hide pause/resume button if disablePause is true */}
+          {(!isStrictMode || !running) && !disablePause && (
             <button
               onClick={onToggleRunning}
               className={`btn btn-${colorToken} gap-2 active:scale-[0.98] transition-transform duration-150 btn-sm md:btn-md`}

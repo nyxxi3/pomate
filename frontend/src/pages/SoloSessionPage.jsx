@@ -1,15 +1,20 @@
 import GoalsCard from "../components/GoalsCard";
+import HabitTracker from "../components/HabitTracker";
 import SoloTimer from "../components/solo/SoloTimer";
 import SoloControls from "../components/solo/SoloControls";
+import ProgressCard from "../components/ProgressCard";
+import ZoomTimer from "../components/ZoomTimer";
 // SoloStats removed from timer section per request
 import DashboardSidebar from "../components/DashboardSidebar";
 import { useMobileSidebarStore } from "../store/useMobileSidebarStore";
 import { useTimerStore } from "../store/useTimerStore";
+import { useZoomStore } from "../store/useZoomStore";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSoloSessionStorage } from "../lib/useSoloSessionStorage";
 import { fetchStats } from "../lib/sessionsApi";
-import { Coffee, Briefcase } from "lucide-react";
+import notificationService from "../lib/notificationService.js";
+import { Coffee, Briefcase, Maximize2 } from "lucide-react";
 
 const SoloSessionPage = () => {
   const [stats, setStats] = useState(null);
@@ -80,10 +85,16 @@ const SoloSessionPage = () => {
 
 
   useEffect(() => {
-    // Request notification permission
-    if (Notification.permission === "default") {
-      Notification.requestPermission();
-    }
+    // Initialize notification service and request permission
+    const initNotifications = async () => {
+      try {
+        await notificationService.requestPermission();
+      } catch (error) {
+        console.error('Failed to initialize notifications:', error);
+      }
+    };
+    
+    initNotifications();
     
     const bootstrap = async () => {
       try {
@@ -219,6 +230,7 @@ const SoloSessionPage = () => {
   const badgeBg = `bg-${colorToken}`;
 
   const { isMobileSidebarOpen, setIsMobileSidebarOpen } = useMobileSidebarStore();
+  const { toggleZoom } = useZoomStore();
   
   // Block mobile sidebar in strict mode
   useEffect(() => {
@@ -229,6 +241,9 @@ const SoloSessionPage = () => {
 
   return (
     <div className="min-h-screen bg-base-100 pt-20">{/* extra space below navbar */}
+      {/* Zoom Timer Overlay */}
+      <ZoomTimer />
+      
       {/* Mobile Sidebar Overlay for Solo page */}
       {/* Reuse Dashboard's slide-out sidebar */}
       <DashboardSidebar 
@@ -238,10 +253,10 @@ const SoloSessionPage = () => {
       />
 
       <div className="container mx-auto px-4 pb-10">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
-          {/* Left: Focus Time card (row 1) */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left: Focus Time card (row 1) - Fixed height to match Progress */}
           <div className="lg:col-span-3">
-            <div className="bg-base-100 rounded-xl p-6 shadow-sm border border-base-300 h-full">
+            <div className="bg-base-100 rounded-xl p-6 shadow-sm border border-base-300 h-full flex flex-col">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className={`w-8 h-8 ${badgeBg} rounded-lg flex items-center justify-center`}>
@@ -257,18 +272,25 @@ const SoloSessionPage = () => {
                     {isStrictMode && <span className="text-error ml-2 text-sm">🔒 STRICT</span>}
                   </h2>
                 </div>
+                <button
+                  onClick={() => toggleZoom('solo')}
+                  className="btn btn-ghost btn-sm"
+                  title="Zoom timer (F11)"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </button>
               </div>
 
 
 
-              <div className="flex flex-col items-center gap-6">
+              <div className="flex flex-col items-center gap-8 flex-1 justify-center py-4">
                 <SoloTimer remainingSeconds={remaining} totalSeconds={totalSeconds} colorToken={colorToken} />
 
                 <SoloControls
                   running={running}
                   hasStarted={hasStarted}
                   isStrictMode={isStrictMode}
-                  onToggleRunning={() => {
+                  onToggleRunning={async () => {
                     if (!running) {
                       // Clear any previous error
                       setStrictModeError('');
@@ -296,9 +318,9 @@ const SoloSessionPage = () => {
                       // Pass test duration to timer if in testing mode
                       if (TESTING_MODE && !hasStarted) {
                         const testDuration = mode === "work" ? 10 : 5;
-                        startTimer(testDuration);
+                        await startTimer(testDuration);
                       } else {
-                        startTimer();
+                        await startTimer();
                       }
                     } else {
                       // In strict mode, don't allow pause - this should never happen as button won't be shown
@@ -431,76 +453,20 @@ const SoloSessionPage = () => {
 
           {/* Right: Today's Progress (row 1) */}
           <div className="lg:col-span-1">
-            <div className="bg-base-100 rounded-xl p-6 shadow-sm border border-base-300 h-full">
-              <div className="flex items-center gap-2 mb-4">
-                <div className={`w-8 h-8 ${badgeBg} rounded-lg flex items-center justify-center`}>
-                  <span className="text-primary-content font-bold">⚡</span>
-                </div>
-                <h3 className="text-3xl font-semibold text-base-content font-fredoka">Your Progress</h3>
-              </div>
-              
-              {/* Today's Date and Time */}
-              <div className="mb-4 text-center">
-                <div className="text-lg font-semibold text-base-content">
-                  {new Date().toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
-                </div>
-                <div className="text-base font-medium text-base-content/70 mt-1">
-                  {new Date().toLocaleTimeString('en-US', { 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    hour12: true 
-                  })}
-                </div>
-              </div>
-              
-              {/* Today's Progress - Primary Metrics */}
-              <div className="text-center mb-4">
-                <div className={`text-5xl font-bold text-${colorToken} font-fredoka`}>
-                  {stats ? formatTime(stats.todayFocusSeconds) : "0m"}
-                </div>
-                <div className="text-sm text-base-content/60 mb-2">Focus Time Today</div>
-                
-                <div className={`text-3xl font-bold text-${colorToken} font-fredoka`}>
-                  {stats ? stats.todayCompletedCount : 0}
-                </div>
-                <div className="text-sm text-base-content/60">Completed Sessions</div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm text-base-content/70">This Week</span>
-                  <div className="text-right">
-                    <div className="text-base-content font-medium">{stats ? formatTime(stats.weekFocusSeconds) : "0m"}</div>
-                    <div className="text-xs text-base-content/60">{stats ? stats.weekCompletedCount : 0} sessions</div>
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-base-content/70">This Month</span>
-                  <div className="text-right">
-                    <div className="text-base-content font-medium">{stats ? formatTime(stats.monthFocusSeconds) : "0m"}</div>
-                    <div className="text-xs text-base-content/60">{stats ? stats.monthCompletedCount : 0} sessions</div>
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-base-content/70">This Year</span>
-                  <div className="text-right">
-                    <div className="text-base-content font-medium">{stats ? formatTime(stats.yearFocusSeconds) : "0m"}</div>
-                    <div className="text-xs text-base-content/60">{stats ? stats.yearCompletedCount : 0} sessions</div>
-                  </div>
-                </div>
-              </div>
-              
-            </div>
+            <ProgressCard colorToken={colorToken} />
           </div>
+        </div>
 
-                    {/* Left: Today's Goals (row 2) */}
+        {/* Second Row: Goals and Habits */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-2">
+          {/* Left: Today's Goals (row 2) - Expanded to fill space */}
           <div className="lg:col-span-3">
             <GoalsCard colorToken={colorToken} />
+          </div>
+
+          {/* Right: Habits (row 2) */}
+          <div className="lg:col-span-1">
+            <HabitTracker colorToken={colorToken} />
           </div>
         </div>
       </div>
